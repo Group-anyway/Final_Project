@@ -20,7 +20,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 #Downloading and Prepping the Data
-tele <- read.csv("tele.csv", stringsAsFactors = TRUE)
+hd <- read.csv("tele.csv", stringsAsFactors = TRUE)
 summary(tele)
 
 #We are deleting the "duration" variable because it is an after the fact measurement. We only should be using variables that we know before the call
