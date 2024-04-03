@@ -1,1 +1,70 @@
+---
+title: "Final_Project"
+author: "Anyway team"
+date: "3/22/2020"
+output:
+  html_document:
+    toc: true
+    theme: readable
+    highlight: tango
+    code_folding: show
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Lib and Data
+
+```{r}
+library(janitor)
+library(tidyverse)
+
+hddata = read.csv("framingham.csv")
+
+# Rename variables
+hddata = hddata %>%
+  rename("Sex" = "male",
+             "edu" = "education",
+             "csmk" = "currentSmoker",
+             "cpd" = "cigsPerDay",
+             "stroke" = "prevalentStroke",
+             "hype" = "prevalentHyp",
+             "chol" = "totChol",
+             "hr" = "heartRate",
+             "CHD" = "TenYearCHD")
+
+str(hd)
+summary(hd)
+```
+
+## Transform and Split
+
+```{r}
+hd_mm = as.data.frame(model.matrix(~ . -1, data = hddata)) # change all var to dummies
+hd_mm = clean_names(hd_mm)
+
+train_ratio = 0.5
+set.seed(12345)
+train_rows = sample(1:nrow(hd_mm), train_ratio*nrow(hd_mm))
+
+# LR, DT, SVM and RF
+hr_train = hr_mm[train_rows, ]
+hr_test = hr_mm[-train_rows, ]
+
+# ANN
+normalize = function(x){(x - min(x))/(max(x) - min(x))}
+
+hd_norm = as.data.frame(lapply(hd_mm, normalize))
+hd_train_ann = hd_norm[train_rows, ]
+hd_test_ann = hd_norm[-train_rows, ]
+
+# KNN
+hd_train_knn = hd_train_ann
+hd_train_knn_label = hd_train_knn$CHD
+hd_train_knn$CHD = NULL
+
+hd_test_knn = hd_test_ann
+hd_test_knn_label = hd_test_knn$CHD
+hd_test_knn$CHD = NULL
+```
