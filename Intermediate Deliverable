@@ -1,2 +1,29 @@
 Project proposal
 1) what data are you using?
+The data being used comes from a cardiovascular study that took place in Framingham, Massachusetts. 
+The data contains 15 potential risk factors and the response to be predicted is the 10-year risk of CHD development. 
+That is, each data point represents an individual who had each risk factor recorded, then the response ("CHD") has a value of 1 if the individual developed CHD in if the individual developed CHD in the next 10 years, and a 0 if they did not.
+There are over 4200 observations and any missing values are labeled as "NA". Descriptions of each column are listed below:
+Sex: Binary; 1 for male, 0 for female
+Age: Age in years, continuous
+Edu: Categorical variable for education with 4 levels:
+1: no high school degree/GED 2: High School Graduate/GED 3: College Graduate 4: Post-College education
+csmk: Current smoker, binary; 0 for non-smoker, 1 for smoker
+cpd: Cigarettes per day, continuous
+BPMeds: Whether or not the patient was on blood pressure medication, binary; 0 for no, 1 for yes
+stroke: whether or not the patient had previously suffered a stroke, binary; 0 for no, 1 for yes
+hype: Whether or not the patient had hypertension, binary; 0 for no, 1 for yes
+chol: Cholesterol levels (mg/dL), continuous
+sysBP: Systolic Blood Pressure (mmHg), continuous
+diaBP: Diastolic Blood Pressure (mmHg), continuous
+BMI: Body Mass Index, continuous
+HR: Heart Rate (BPM), continuous
+glucose: Glucose levels (mg/dL), continuous
+diabetes: binary, 0 for no diabetes, 1 for has diabetes
+CHD: Response variable to be predicted, binary; 0 for did not develop CHD in the next 10 years, 1 for did develop CHD in the next 10 years.
+b) what business question are you asking?
+Question 1: Coronary heart disease (CHD) accounts for approximately one in every four deaths across the US，if we can develop a predictive model based on the disease realated risk factors, policy makers can advocate policiesfor lifestyle changes etx to imrove life expectancy of people in US.
+Question 2: For insurance companies, they wanted to make trade offs bwtween Prevention programmes,including measures such as the use of evidence-based medical therapies and direcltly reimburse later stage treatment expenses, so they need a celar picture about what factors matter most to predict future CHD occurance, then analyze the cost-effectiveness of different individualised prevention strategies
+
+c) preliminary exploration and cleaning of the data 
+d) a preliminary regression model to check whether the data has explanatory power for your question.
