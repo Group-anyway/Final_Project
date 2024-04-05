@@ -26,4 +26,6 @@ Question 1: Coronary heart disease (CHD) accounts for approximately one in every
 Question 2: For insurance companies, they wanted to make trade offs bwtween Prevention programmes,including measures such as the use of evidence-based medical therapies and direcltly reimburse later stage treatment expenses, so they need a celar picture about what factors matter most to predict future CHD occurance, then analyze the cost-effectiveness of different individualised prevention strategies
 
 c) preliminary exploration and cleaning of the data 
+Please see Data Cleaning file
 d) a preliminary regression model to check whether the data has explanatory power for your question.
+Please see Final_lr_dr_rf.Rmd and the GP_ANN_KNN_SVM.Rmd
