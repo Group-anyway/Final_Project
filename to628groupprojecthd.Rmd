@@ -62,7 +62,9 @@ hd_test_knn_y <- hd_norm[train_rows, "ten_year_chd"]
 simplemodel <- glm(hd_train_lr_dt_rf$ten_year_chd ~., data = hd_train_lr_dt_rf, family = "binomial")
 summary(simplemodel)
 lrpred <- predict(simplemodel, newdata = hd_test_lr_dt_rf, type = "response")
-lrbinpred <- ifelse(lrpred >= 0.3, 1, 0) ##为什么用0.3,因为数据impalance，如果threhold高就无法显示数据
+lrbinpred <- ifelse(lrpred >= 0.3, 1, 0) ##Because of the imbalanced dataset, we need to set a small threshold to guarantee the confusion matrix can better capture the minority part. 
+
+
 summary(lrbinpred)
 confusionMatrix(as.factor(lrbinpred), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 ```
@@ -70,9 +72,11 @@ confusionMatrix(as.factor(lrbinpred), as.factor(hd_test_lr_dt_rf$ten_year_chd), 
 ## knn model
 ```{r}
 knn_pred <- knn(train = hd_train_knn_x, test = hd_test_knn_x, cl = hd_train_knn_y, k = 5, prob = TRUE)
-summary(knn_pred) ## k=5 也是因为数据imbalance
+summary(knn_pred)
+## Since the imbalaced dataset, we need to pick a smaller k. A smaller k enables the model to capture more of the local structure of the data, which can be critical if the minority class forms compact clusters surrounded by the majority class. A larger k might overlook these local patterns in favor of broader, global patterns that tend to favor the majority class.
 
-knn_raw_pred <- attributes(knn_pred)$prob ## 最后用的是proab 因为这是原始数据不能用binary
+
+knn_raw_pred <- attributes(knn_pred)$prob ## we use probaility, the raw data, instead of the binary number. 
 
 confusionMatrix(as.factor(knn_pred), as.factor(hd_test_knn_y), positive = "1")
 ```
@@ -84,6 +88,15 @@ hd_svm2 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "rbfdot")
 hd_svmpred1 <- predict(hd_svm1, hd_test_lr_dt_rf)
 hd_svmpred2 <- predict(hd_svm2, hd_test_lr_dt_rf)
 hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0) ## imbalance, 对比一下和别的数字0.5 or 0.2
+ 
+#if we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; 
+True Positives (TP): 4 
+# if we set the threshold to 0.2, we will get True Negatives (TN): 1288; False Positives (FP): 277; False Negatives (FN): 157; True Positives (TP):106
+# After we compare two matrix, we can found : 
+#1)Poor F1 Score for the Minority Class: The F1 Score, which balances precision and recall, may be quite low for the minority class. The model's precision is TP / (TP + FP), which is also low (4 / (4 + 4) = 0.5 in this case), and the F1 Score will be affected by both.
+#2)Sensitivity (Recall) is Extremely Low (0.041825 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
+#3)Specificity is High(0.987220), but Misleading: Specificity is TN / (TN + FP), which will be high due to the high TN. This could mistakenly suggest that the model is performing better than it actually is.
+
 confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 ```
 ## decision tree
