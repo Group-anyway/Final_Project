@@ -87,7 +87,7 @@ hd_svm1 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "vanilladot
 hd_svm2 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "rbfdot")
 hd_svmpred1 <- predict(hd_svm1, hd_test_lr_dt_rf)
 hd_svmpred2 <- predict(hd_svm2, hd_test_lr_dt_rf)
-hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0) ## imbalance, 对比一下和别的数字0.5 or 0.2
+hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0) 
  
 #if we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; 
 True Positives (TP): 4 
