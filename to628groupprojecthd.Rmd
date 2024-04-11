@@ -94,8 +94,8 @@ True Positives (TP): 4
 # if we set the threshold to 0.2, we will get True Negatives (TN): 1288; False Positives (FP): 277; False Negatives (FN): 157; True Positives (TP):106
 # After we compare two matrix, we can found : 
 #1)Poor F1 Score for the Minority Class: The F1 Score, which balances precision and recall, may be quite low for the minority class. The model's precision is TP / (TP + FP), which is also low (4 / (4 + 4) = 0.5 in this case), and the F1 Score will be affected by both.
-#2)Sensitivity (Recall) is Extremely Low (0.041825 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
-#3)Specificity is High(0.987220), but Misleading: Specificity is TN / (TN + FP), which will be high due to the high TN. This could mistakenly suggest that the model is performing better than it actually is.
+#2)Sensitivity (Recall) is Extremely Low (0.015209 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
+#3)Specificity is High(0.997444), but Misleading: Specificity is TN / (TN + FP), which will be high due to the high TN. This could mistakenly suggest that the model is performing better than it actually is.
 
 confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 ```
@@ -150,7 +150,7 @@ confusionMatrix(as.factor(pred_2), as.factor(test_2$hd_test_lr_dt_rf.ten_year_ch
 ```
 ## error cost matrix
 ```{r}
-cost_matrix <- matrix(c(0,1,3,0), nrow =2 ) ## 为什么用这个0130 这个数字，因为让右上角数字尽量减小
+cost_matrix <- matrix(c(0,1,3,0), nrow =2 ) ## we increase the cost for false positive. 
 
 cost_model <- C5.0(as.factor(hd_test_lr_dt_rf.ten_year_chd) ~. , data= train_2, costs = cost_matrix)
 plot(cost_model)
