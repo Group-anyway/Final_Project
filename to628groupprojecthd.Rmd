@@ -22,6 +22,7 @@ library(kernlab)
 library(caret)
 hd <- read.csv("framingham.csv")
 summary(hd)
+table(hd$TenYearCHD) ##the data of depende variable are imbalacing, since we have 644 for "1", and 3594 for "0". Thus we will address the imbalaced dataset by setting a smaller threshold when generating the binary prediction, and picking proper parameters for cost matrix. 
 ```
 
 ## Getting Data Ready for Analysis
