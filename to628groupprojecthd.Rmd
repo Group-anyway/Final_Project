@@ -1,0 +1,146 @@
+---
+title: "to628groupproject"
+author: "Group Anyway"
+date: "2024-04-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## load library
+```{r}
+library(janitor)
+library(caret)
+library(class)
+library(neuralnet)
+library(C50)
+library(randomForest)
+library(kernlab)
+library(caret)
+hd <- read.csv("framingham.csv")
+summary(hd)
+```
+
+## Getting Data Ready for Analysis
+```{r}
+hdmm <- as.data.frame(model.matrix(~.-1,hd))
+hdmm <- clean_names(hdmm)
+
+
+train_ratio <- 0.5 
+set.seed(12345)
+train_rows <- sample(1: nrow(hdmm), train_ratio*nrow(hdmm))
+
+hd_train_lr_dt_rf <- hdmm[train_rows, ]
+hd_test_lr_dt_rf <- hdmm[-train_rows, ]
+
+## data for ann
+normalize <- function(x) {
+   ((x - min(x)) / (max(x) - min(x)))
+}
+
+hd_norm <- as.data.frame(lapply(hdmm, normalize))
+hd_train_ann <- hd_norm[train_rows, ]
+hd_test_ann <- hd_norm[-train_rows, ]
+
+## data for knn
+## separating labels (y values) and predictors (x values)
+hd_train_knn_x <- hd_norm[-train_rows, -match("ten_year_chd",names(hd_norm))]
+hd_test_knn_x <- hd_norm[train_rows, -match("ten_year_chd",names(hd_norm))]
+
+hd_train_knn_y <- hd_norm[-train_rows, "ten_year_chd"]
+hd_test_knn_y <- hd_norm[train_rows, "ten_year_chd"]
+
+```
+
+## logistic regression
+```{r}
+simplemodel <- glm(hd_train_lr_dt_rf$ten_year_chd ~., data = hd_train_lr_dt_rf, family = "binomial")
+summary(simplemodel)
+lrpred <- predict(simplemodel, newdata = hd_test_lr_dt_rf, type = "response")
+lrbinpred <- ifelse(lrpred >= 0.3, 1, 0) ##为什么用0.3,因为数据impalance，如果threhold高就无法显示数据
+summary(lrbinpred)
+confusionMatrix(as.factor(lrbinpred), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+
+## knn model
+```{r}
+knn_pred <- knn(train = hd_train_knn_x, test = hd_test_knn_x, cl = hd_train_knn_y, k = 5, prob = TRUE)
+summary(knn_pred) ## k=5 也是因为数据imbalance
+
+knn_raw_pred <- attributes(knn_pred)$prob ## 最后用的是proab 因为这是原始数据不能用binary
+
+confusionMatrix(as.factor(knn_pred), as.factor(hd_test_knn_y), positive = "1")
+```
+
+## svm model
+```{r}
+hd_svm1 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "vanilladot")
+hd_svm2 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "rbfdot")
+hd_svmpred1 <- predict(hd_svm1, hd_test_lr_dt_rf)
+hd_svmpred2 <- predict(hd_svm2, hd_test_lr_dt_rf)
+hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0) ## imbalance, 对比一下和别的数字0.5 or 0.2
+confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+## decision tree
+```{r}
+summary(hd_test_lr_dt_rf)
+
+library(rpart)
+
+dtmodel <- rpart(ten_year_chd ~ ., data = hd_train_lr_dt_rf)
+dtpred <- predict(dtmodel, hd_test_lr_dt_rf)
+
+summary(dtpred)
+dtpredbin <- ifelse(dtpred >= 0.2, 1, 0) ##同上
+
+confusionMatrix(as.factor(dtpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+
+## random forest
+```{r}
+set.seed(12345)
+rfmodel <- randomForest(ten_year_chd ~., data = hd_train_lr_dt_rf)
+summary(rfmodel)
+rfpred <- predict(rfmodel, hd_test_lr_dt_rf)
+rfpredbin <- ifelse(rfpred >= 0.2, 1, 0)
+summary(rfpred)
+
+confusionMatrix(as.factor(rfpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+## ann model
+```{r}
+annmodel <- neuralnet(ten_year_chd ~ ., data = hd_train_ann, hidden = 5)
+ann_pred <- predict(annmodel, newdata = hd_test_ann)
+ann_pred_bin <- ifelse(ann_pred >= 0.5, 1, 0)
+confusionMatrix(as.factor(ann_pred_bin), as.factor(hd_test_ann$ten_year_chd), positive = "1")
+```
+
+## combine everything
+```{r}
+hd_combined <- data.frame(lrpred, knn_raw_pred, ann_pred, hd_svmpred1, hd_svmpred2, dtpred, rfpred, hd_test_lr_dt_rf$ten_year_chd)
+
+trainratio <- 0.7
+set.seed(12345)
+train_rows <- sample(1:nrow(hd_combined), trainratio*nrow(hd_combined))
+
+train_2 <- hd_combined[train_rows, ]
+test_2 <- hd_combined[-train_rows, ]
+
+model_2 <- C5.0(as.factor(hd_test_lr_dt_rf.ten_year_chd) ~. , data= train_2)
+pred_2 <- predict(model_2, test_2)
+confusionMatrix(as.factor(pred_2), as.factor(test_2$hd_test_lr_dt_rf.ten_year_chd), positive = "1")
+```
+## error cost matrix
+```{r}
+cost_matrix <- matrix(c(0,1,3,0), nrow =2 ) ## 为什么用这个0130 这个数字，因为让右上角数字尽量减小
+
+cost_model <- C5.0(as.factor(hd_test_lr_dt_rf.ten_year_chd) ~. , data= train_2, costs = cost_matrix)
+plot(cost_model)
+pred_cost <- predict(cost_model, test_2)
+confusionMatrix(as.factor(pred_cost), as.factor(test_2$hd_test_lr_dt_rf.ten_year_chd), positive = "1")
+```
+
