@@ -1,0 +1,171 @@
+---
+title: "to628groupproject"
+author: "Group Anyway"
+date: "2024-04-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## load library
+```{r}
+library(janitor)
+library(caret)
+library(class)
+library(neuralnet)
+library(C50)
+library(randomForest)
+library(kernlab)
+library(caret)
+hd <- read.csv("framingham.csv")
+summary(hd)
+```
+
+## Getting Data Ready for Analysis
+```{r}
+hdmm <- as.data.frame(model.matrix(~.-1,hd))
+hdmm <- clean_names(hdmm)
+
+
+train_ratio <- 0.5 
+set.seed(12345)
+train_rows <- sample(1: nrow(hdmm), train_ratio*nrow(hdmm))
+
+hd_train_lr_dt_rf <- hdmm[train_rows, ]
+hd_test_lr_dt_rf <- hdmm[-train_rows, ]
+
+## data for ann
+normalize <- function(x) {
+   ((x - min(x)) / (max(x) - min(x)))
+}
+
+hd_norm <- as.data.frame(lapply(hdmm, normalize))
+hd_train_ann <- hd_norm[train_rows, ]
+hd_test_ann <- hd_norm[-train_rows, ]
+
+## data for knn
+## separating labels (y values) and predictors (x values)
+hd_train_knn_x <- hd_norm[-train_rows, -match("ten_year_chd",names(hd_norm))]
+hd_test_knn_x <- hd_norm[train_rows, -match("ten_year_chd",names(hd_norm))]
+
+hd_train_knn_y <- hd_norm[-train_rows, "ten_year_chd"]
+hd_test_knn_y <- hd_norm[train_rows, "ten_year_chd"]
+
+```
+
+## logistic regression
+```{r}
+simplemodel <- glm(hd_train_lr_dt_rf$ten_year_chd ~., data = hd_train_lr_dt_rf, family = "binomial")
+summary(simplemodel)
+lrpred <- predict(simplemodel, newdata = hd_test_lr_dt_rf, type = "response")
+lrbinpred <- ifelse(lrpred >= 0.2, 1, 0)
+# Because of the imbalanced dataset, we need to set a small threshold to guarantee the confusion matrix can better capture the minority part
+#Prediction0 reference1 means that coronary heart disease was not predicted to occur within 10 years but was actually present, while prediction1 reference0 means that coronary heart disease was predicted to occur within 10 years but not actually present. Therefore, a higher value of prediction1 reference0 than prediction0 reference1 indicates that the model data selection is reasonable, meaning misdiagnosis is better than not being detected.
+summary(lrbinpred)
+confusionMatrix(as.factor(lrbinpred), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+
+## knn model
+```{r}
+knn_pred <- knn(train = hd_train_knn_x, test = hd_test_knn_x, cl = hd_train_knn_y, k = 5, prob = TRUE)
+summary(knn_pred)
+# Since the imbalanced dataset, we need to pick a smaller k. A smaller k enables the model to capture more of the local structure of the data, which can be critical if the minority class forms compact clusters surrounded by the majority class. A larger k might overlook these local patterns in favor of broader, global patterns that tend to favor the majority class
+knn_raw_pred <- attributes(knn_pred)$prob
+# we use probability, the raw data, instead of the binary number.
+confusionMatrix(as.factor(knn_pred), as.factor(hd_test_knn_y), positive = "1")
+```
+
+## svm model
+```{r}
+hd_svm1 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "vanilladot")
+hd_svm2 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "rbfdot")
+hd_svmpred1 <- predict(hd_svm1, hd_test_lr_dt_rf)
+hd_svmpred2 <- predict(hd_svm2, hd_test_lr_dt_rf)
+hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0) 
+#if we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; True Positives (TP): 4 
+# if we set the threshold to 0.2, we will get True Negatives (TN): 1516; False Positives (FP): 49; False Negatives (FN): 234; True Positives (TP):29
+# After we compare two matrices, we can find: 
+#1)Poor F1 Score for the Minority Class: The F1 Score, which balances precision and recall, may be quite low for the minority class. The model's precision is TP / (TP + FP), which is also low (4 / (4 + 4) = 0.5 in this case), and the F1 Score will be affected by both.
+#2)Sensitivity (Recall) is Extremely Low (0.015209 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
+#3)Specificity is High(0.997444), but Misleading: Specificity is TN / (TN + FP), which will be high due to the high TN. This could mistakenly suggest that the model is performing better than it is.
+
+confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+## decision tree
+```{r}
+summary(hd_test_lr_dt_rf)
+
+library(rpart)
+
+dtmodel <- rpart(ten_year_chd ~ ., data = hd_train_lr_dt_rf)
+dtpred <- predict(dtmodel, hd_test_lr_dt_rf)
+
+summary(dtpred)
+dtpredbin <- ifelse(dtpred >= 0.2, 1, 0)
+# The reason for choosing 0.2 is the same as above
+
+confusionMatrix(as.factor(dtpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+
+## random forest
+```{r}
+set.seed(12345)
+rfmodel <- randomForest(ten_year_chd ~., data = hd_train_lr_dt_rf)
+summary(rfmodel)
+rfpred <- predict(rfmodel, hd_test_lr_dt_rf)
+rfpredbin <- ifelse(rfpred >= 0.2, 1, 0)
+summary(rfpred)
+
+confusionMatrix(as.factor(rfpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+```
+## ann model
+```{r}
+annmodel <- neuralnet(ten_year_chd ~ ., data = hd_train_ann, hidden = 5)
+ann_pred <- predict(annmodel, newdata = hd_test_ann)
+ann_pred_bin <- ifelse(ann_pred >= 0.5, 1, 0)
+confusionMatrix(as.factor(ann_pred_bin), as.factor(hd_test_ann$ten_year_chd), positive = "1")
+```
+
+## combine everything
+```{r}
+hd_combined <- data.frame(lrpred, knn_raw_pred, ann_pred, hd_svmpred1, hd_svmpred2, dtpred, rfpred, hd_test_lr_dt_rf$ten_year_chd)
+
+trainratio <- 0.7
+set.seed(12345)
+train_rows <- sample(1:nrow(hd_combined), trainratio*nrow(hd_combined))
+
+train_2 <- hd_combined[train_rows, ]
+test_2 <- hd_combined[-train_rows, ]
+
+model_2 <- C5.0(as.factor(hd_test_lr_dt_rf.ten_year_chd) ~. , data= train_2)
+pred_2 <- predict(model_2, test_2)
+confusionMatrix(as.factor(pred_2), as.factor(test_2$hd_test_lr_dt_rf.ten_year_chd), positive = "1")
+```
+## error cost matrix
+```{r}
+cost_matrix <- matrix(c(0,1,3,0), nrow =2 )
+
+#False Positive (FP): A false positive occurs when the model incorrectly predicts that a person has heart disease when they do not. While this is certainly not ideal—possibly leading to unnecessary stress for the patient, additional tests, and healthcare costs—the consequences are generally not as severe as missing a true positive case.
+
+#False Negative (FN): A false negative in the context of heart disease prediction means that a person who has heart disease is incorrectly predicted by the model as not having the disease. This is potentially dangerous as it may result in the patient not receiving timely treatment, which can lead to serious health complications or even death. Therefore, the cost of false negatives is considered to be high, as it directly impacts patient health and outcomes.
+
+cost_model <- C5.0(as.factor(hd_test_lr_dt_rf.ten_year_chd) ~. , data= train_2, costs = cost_matrix)
+plot(cost_model)
+pred_cost <- predict(cost_model, test_2)
+confusionMatrix(as.factor(pred_cost), as.factor(test_2$hd_test_lr_dt_rf.ten_year_chd), positive = "1")
+```
+Summary of Model Performance
+```{r}
+modeldata <- data.frame(
+  Model = c("LR", "ANN", "KNN", "SVM", "DT", "RF", "Cost", "Combine"),
+  Kappa = c(0.2076, 0.1016, 0.1012, 0.2010, 0.1900, 0.2172, 0.1365, 0.0758)
+)
+matrix_data <- matrix(data = modeldata$Kappa, nrow = nrow(modeldata), ncol = 1)
+rownames(matrix_data) <- modeldata$Model
+colnames(matrix_data) <- "Kappa"
+print(matrix_data)
+```
+
