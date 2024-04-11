@@ -1,0 +1,192 @@
+---
+title: "to628hmktelestack"
+author: "zichen zhou"
+date: "2024-04-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## load library
+```{r}
+library(janitor)
+library(caret)
+library(class)
+library(neuralnet)
+library(C50)
+library(randomForest)
+library(kernlab)
+library(caret)
+tele <- read.csv("tele.csv")
+```
+
+## data load
+```{r}
+tele$X <- NULL
+tele$duration <- NULL
+tele$pdaysdummy <- ifelse(tele$pdays == 999, 0, 1)
+tele$pdays <- NULL
+str(tele)
+```
+
+## Getting Data Ready for Analysis
+```{r}
+telemm <- as.data.frame(model.matrix(~.-1,tele))
+telemm <- clean_names(telemm)
+
+train_ratio <- 0.5
+set.seed(12345)
+train_rows <- sample(1: nrow(telemm), train_ratio*nrow(telemm))
+
+tele_train_lr_dt_rf <- telemm[train_rows, ]
+tele_test_lr_dt_rf <- telemm[-train_rows, ]
+
+## data for ann
+normalize <- function(x) {
+   ((x - min(x)) / (max(x) - min(x)))
+}
+
+tele_norm <- as.data.frame(lapply(telemm, normalize))
+tele_train_ann <- tele_norm[train_rows, ]
+tele_test_ann <- tele_norm[-train_rows, ]
+
+## data for knn
+## separating labels (y values) and predictors (x values)
+tele_train_knn_x <- tele_norm[-train_rows, -match("yyes",names(tele_norm))]
+tele_test_knn_x <- tele_norm[train_rows, -match("yyes",names(tele_norm))]
+
+tele_train_knn_y <- tele_norm[-train_rows, "yyes"]
+tele_test_knn_y <- tele_norm[train_rows, "yyes"]
+```
+
+## logistic regression
+```{r}
+simplemodel <- glm(yyes ~., data = tele_train_lr_dt_rf, family = "binomial")
+summary(simplemodel)
+lrpred <- predict(simplemodel, newdata = tele_test_lr_dt_rf, type = "response")
+lrbinpred <- ifelse(lrpred >= 0.3, 1, 0)
+summary(lrbinpred)
+confusionMatrix(as.factor(lrbinpred), as.factor(tele_test_lr_dt_rf$yyes), positive = "1")
+
+```
+
+## knn model
+```{r}
+knn_pred <- knn(train = tele_train_knn_x, test = tele_test_knn_x, cl = tele_train_knn_y, k = 15)
+summary(knn_pred)
+confusionMatrix(as.factor(knn_pred), as.factor(tele_test_knn_y), positive = "1")
+```
+
+
+## svm model 
+```{r}
+tele_svm1 <- ksvm(yyes ~ ., data = tele_train_lr_dt_rf, kernel = "vanilladot")
+tele_svm2 <- ksvm(yyes ~ ., data = tele_train_lr_dt_rf, kernel = "rbfdot")
+tele_svmpred1 <- predict(tele_svm1, tele_test_lr_dt_rf)
+tele_svmpred2 <- predict(tele_svm2, tele_test_lr_dt_rf)
+tele_svmpredbin <- ifelse(tele_svmpred2 >= 0.5, 1, 0)
+confusionMatrix(as.factor(tele_svmpredbin), as.factor(tele_test_lr_dt_rf$yyes), positive = "1")
+```
+
+
+## decision tree
+```{r}
+dtmodel <- C5.0(as.factor(yyes) ~., data = tele_train_lr_dt_rf)
+dtpred <- predict(dtmodel, tele_test_lr_dt_rf)
+confusionMatrix(as.factor(dtpred), as.factor(tele_test_lr_dt_rf$yyes), positive = "1")
+```
+
+## random forest
+```{r}
+set.seed(12345)
+rfmodel <- randomForest(as.factor(yyes) ~., data = tele_train_lr_dt_rf)
+summary(rfmodel)
+rfpred <- predict(rfmodel, tele_test_lr_dt_rf)
+summary(rfpred)
+confusionMatrix(as.factor(rfpred), as.factor(tele_test_lr_dt_rf$yyes), positive = "1")
+```
+## ann model
+```{r}
+annmodel <- neuralnet(yyes ~ ., data = tele_train_ann, hidden = 1)
+ann_pred <- predict(annmodel, newdata = tele_test_ann)
+ann_pred_bin <- ifelse(ann_pred >= 0.5, 1, 0)
+confusionMatrix(as.factor(ann_pred_bin), as.factor(tele_test_ann$yyes), positive = "1")
+```
+
+
+## combined everything
+```{r}
+tele_combined <- data.frame(lrbinpred, knn_pred, ann_pred_bin, tele_svmpredbin, dtpred, rfpred, tele_test_lr_dt_rf$yyes)
+
+trainratio <- 0.5
+set.seed(12345)
+train_rows <- sample(1:nrow(tele_combined), trainratio*nrow(tele_combined))
+
+train_2 <- tele_combined[train_rows, ]
+test_2 <- tele_combined[-train_rows, ]
+
+model_2 <- C5.0(as.factor(tele_test_lr_dt_rf.yyes) ~. , data= train_2)
+pred_2 <- predict(model_2, test_2)
+confusionMatrix(as.factor(pred_2), as.factor(test_2$tele_test_lr_dt_rf.yyes), positive = "1")
+```
+## error cost matrix
+```{r}
+cost_matrix <- matrix(c(0,1,4,0), nrow =2 )
+cost_model <- model_2 <- C5.0(as.factor(tele_test_lr_dt_rf.yyes) ~. , data= train_2, costs = cost_matrix)
+plot(cost_model)
+pred_cost <- predict(cost_model, test_2)
+confusionMatrix(as.factor(pred_cost), as.factor(test_2$tele_test_lr_dt_rf.yyes), positive = "1")
+```
+## Auti-Tune Models
+```{r}
+library(caret)
+set.seed(12345)
+
+ctrl <- trainControl(method = "cv", number = 4,
+                     selectionFunction = "oneSE")
+
+# Grid
+grid <- expand.grid(k = seq(1,21,2))
+# Train Command for KNN
+trainmodel <- train(y ~ .,  
+                    data = tele,  
+                    method = "knn",  
+                    tuneGrid = grid,  
+                    trControl = ctrl,
+                    preProcess = c("center", "scale"),
+                    metric = "Kappa")
+print(trainmodel)
+
+
+```
+## Auti-Tune Models tree
+```{r}
+library(caret)
+
+set.seed(12345)
+
+ctrl <- trainControl(method = "cv", number = 4,
+                     selectionFunction = "oneSE")
+
+
+grid <- expand.grid(.model = "tree",
+                    .trials = c(1, 5, 10, 15, 20),
+                    .winnow = "FALSE")
+
+
+trainmodel <- train(as.factor(y) ~ ., data = tele, method = "C5.0",
+           metric = "Kappa",
+           trControl = ctrl,
+           tuneGrid = grid)
+print(trainmodel)
+```
+
+## conclusion 
+## After analyzing the data using four individual models and a combined model, we found the following accuracies: 89.39% for LR, 90.1% for KNN, 90.24% for the decision tree, and 90.1% for the SVM, 90.14% for ANN， 90.07% for random forest，88.6% for cost matrix. Additionally, the combined model achieved an accuracy of 89.89%.
+
+## kappa: 0.4062 for LR, 0.246 for KNN, 0.3269 for the decision tree, and 0.2678 for the SVM, 0.3169 for ANN， 90.3362 for random forest，88.6% for cost matrix. Additionally, the combined model achieved 0.3065.
+
+## The Decision Tree model had the highest accuracy and kappa value among the individual models.The final values used for the model were trials = 15, model = tree and winnow = FALSE.
+
