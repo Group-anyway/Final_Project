@@ -2,7 +2,12 @@
 title: "to628groupproject"
 author: "Group Anyway"
 date: "2024-04-11"
-output: html_document
+output:
+  html_document:
+    toc: true
+    theme: readable
+    highlight: tango
+    code_folding: show
 ---
 
 ```{r setup, include=FALSE}
@@ -23,6 +28,7 @@ library(caret)
 hd <- read.csv("framingham.csv")
 summary(hd)
 ```
+The outcome variable is ten_year_chd, and we can see the data is pretty imbalance (with 3594 zeros and 644 ones), indicating that we need to take this issue into consideration later.
 
 ## Getting Data Ready for Analysis
 ```{r}
@@ -63,16 +69,18 @@ summary(simplemodel)
 lrpred <- predict(simplemodel, newdata = hd_test_lr_dt_rf, type = "response")
 lrbinpred <- ifelse(lrpred >= 0.2, 1, 0)
 # Because of the imbalanced dataset, we need to set a small threshold to guarantee the confusion matrix can better capture the minority part
-#Prediction0 reference1 means that coronary heart disease was not predicted to occur within 10 years but was actually present, while prediction1 reference0 means that coronary heart disease was predicted to occur within 10 years but not actually present. Therefore, a higher value of prediction1 reference0 than prediction0 reference1 indicates that the model data selection is reasonable, meaning misdiagnosis is better than not being detected.
+#Prediction0-reference1 means that coronary heart disease was not predicted to occur within 10 years but was actually present, while prediction1-reference0 means that coronary heart disease was predicted to occur within 10 years but not actually present. Therefore, a greater number of prediction1-reference0 than prediction0 reference1 is more reasonable, since in our context misdiagnosis is better than not being detected.
 summary(lrbinpred)
 confusionMatrix(as.factor(lrbinpred), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+
+# Acutally we also tried step model and non-linear models, though it seems sensible that some predictors in the model are non-linear, the confusionmatrix did not show better performance. Hence, we remain the simple linear model.
 ```
 
 ## knn model
 ```{r}
 knn_pred <- knn(train = hd_train_knn_x, test = hd_test_knn_x, cl = hd_train_knn_y, k = 5, prob = TRUE)
 summary(knn_pred)
-# Since the imbalanced dataset, we need to pick a smaller k. A smaller k enables the model to capture more of the local structure of the data, which can be critical if the minority class forms compact clusters surrounded by the majority class. A larger k might overlook these local patterns in favor of broader, global patterns that tend to favor the majority class
+# We need to pick a smaller k here due to the imbalance nature of our data. A smaller k enables the model to capture more of the local structure of the data, which can be critical if the minority class forms compact clusters surrounded by the majority class. A larger k might overlook these local patterns in favor of broader, global patterns that tend to favor the majority class.
 knn_raw_pred <- attributes(knn_pred)$prob
 # we use probability, the raw data, instead of the binary number.
 confusionMatrix(as.factor(knn_pred), as.factor(hd_test_knn_y), positive = "1")
@@ -85,15 +93,17 @@ hd_svm2 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "rbfdot")
 hd_svmpred1 <- predict(hd_svm1, hd_test_lr_dt_rf)
 hd_svmpred2 <- predict(hd_svm2, hd_test_lr_dt_rf)
 hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0) 
+
+confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+
 #if we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; True Positives (TP): 4 
 # if we set the threshold to 0.2, we will get True Negatives (TN): 1516; False Positives (FP): 49; False Negatives (FN): 234; True Positives (TP):29
 # After we compare two matrices, we can find: 
 #1)Poor F1 Score for the Minority Class: The F1 Score, which balances precision and recall, may be quite low for the minority class. The model's precision is TP / (TP + FP), which is also low (4 / (4 + 4) = 0.5 in this case), and the F1 Score will be affected by both.
 #2)Sensitivity (Recall) is Extremely Low (0.015209 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
 #3)Specificity is High(0.997444), but Misleading: Specificity is TN / (TN + FP), which will be high due to the high TN. This could mistakenly suggest that the model is performing better than it is.
-
-confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 ```
+
 ## decision tree
 ```{r}
 summary(hd_test_lr_dt_rf)
