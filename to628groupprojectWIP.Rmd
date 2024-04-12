@@ -96,8 +96,8 @@ hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0)
 
 confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 
-#if we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; True Positives (TP): 4 
-# if we set the threshold to 0.2, we will get True Negatives (TN): 1516; False Positives (FP): 49; False Negatives (FN): 234; True Positives (TP):29
+# If we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; True Positives (TP): 4 
+# If we set the threshold to 0.2, we will get True Negatives (TN): 1516; False Positives (FP): 49; False Negatives (FN): 234; True Positives (TP):29
 # After we compare two matrices, we can find: 
 #1)Poor F1 Score for the Minority Class: The F1 Score, which balances precision and recall, may be quite low for the minority class. The model's precision is TP / (TP + FP), which is also low (4 / (4 + 4) = 0.5 in this case), and the F1 Score will be affected by both.
 #2)Sensitivity (Recall) is Extremely Low (0.015209 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
