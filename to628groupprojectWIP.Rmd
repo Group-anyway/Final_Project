@@ -2,7 +2,12 @@
 title: "to628groupproject"
 author: "Group Anyway"
 date: "2024-04-11"
-output: html_document
+output:
+  html_document:
+    toc: true
+    theme: readable
+    highlight: tango
+    code_folding: show
 ---
 
 ```{r setup, include=FALSE}
@@ -10,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-## load library
+## Load library
 ```{r}
 library(janitor)
 library(caret)
@@ -23,6 +28,8 @@ library(caret)
 hd <- read.csv("framingham.csv")
 summary(hd)
 ```
+
+The outcome variable is ten_year_chd, and we can see the data is pretty imbalance (with 3594 zeros and 644 ones), indicating that we need to take this issue into consideration later.
 
 ## Getting Data Ready for Analysis
 ```{r}
@@ -56,45 +63,59 @@ hd_test_knn_y <- hd_norm[train_rows, "ten_year_chd"]
 
 ```
 
-## logistic regression
+## Logistic Regression
+
+Because of the imbalanced dataset, we need to set a small threshold to guarantee the confusion matrix can better capture the minority part.
+
+Prediction0-reference1 means that coronary heart disease was not predicted to occur within 10 years but was actually present, while prediction1-reference0 means that coronary heart disease was predicted to occur within 10 years but not actually present. Therefore, a greater number of prediction1-reference0 than prediction0 reference1 is more reasonable, since in our context misdiagnosis is better than not being detected.
 ```{r}
 simplemodel <- glm(hd_train_lr_dt_rf$ten_year_chd ~., data = hd_train_lr_dt_rf, family = "binomial")
 summary(simplemodel)
 lrpred <- predict(simplemodel, newdata = hd_test_lr_dt_rf, type = "response")
 lrbinpred <- ifelse(lrpred >= 0.2, 1, 0)
-# Because of the imbalanced dataset, we need to set a small threshold to guarantee the confusion matrix can better capture the minority part
-#Prediction0 reference1 means that coronary heart disease was not predicted to occur within 10 years but was actually present, while prediction1 reference0 means that coronary heart disease was predicted to occur within 10 years but not actually present. Therefore, a higher value of prediction1 reference0 than prediction0 reference1 indicates that the model data selection is reasonable, meaning misdiagnosis is better than not being detected.
+
 summary(lrbinpred)
 confusionMatrix(as.factor(lrbinpred), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 ```
 
-## knn model
+Actually we also tried step model and non-linear models, though it seems sensible that some predictors in the model are non-linear, the confusionmatrix did not show better performance. Hence, we remain the simple linear model.
+
+## KNN Model
+
+For KNN model, we need to pick a smaller k here due to the imbalance nature of our data. A smaller k enables the model to capture more of the local structure of the data, which can be critical if the minority class forms compact clusters surrounded by the majority class. A larger k might overlook these local patterns in favor of broader, global patterns that tend to favor the majority class.
+
 ```{r}
 knn_pred <- knn(train = hd_train_knn_x, test = hd_test_knn_x, cl = hd_train_knn_y, k = 5, prob = TRUE)
 summary(knn_pred)
-# Since the imbalanced dataset, we need to pick a smaller k. A smaller k enables the model to capture more of the local structure of the data, which can be critical if the minority class forms compact clusters surrounded by the majority class. A larger k might overlook these local patterns in favor of broader, global patterns that tend to favor the majority class
-knn_raw_pred <- attributes(knn_pred)$prob
-# we use probability, the raw data, instead of the binary number.
+
+knn_raw_pred <- attributes(knn_pred)$prob # we use probability, the raw data, instead of the binary number.
+
 confusionMatrix(as.factor(knn_pred), as.factor(hd_test_knn_y), positive = "1")
 ```
 
-## svm model
+## SVM Model
 ```{r}
 hd_svm1 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "vanilladot")
 hd_svm2 <- ksvm(ten_year_chd ~ ., data = hd_train_lr_dt_rf, kernel = "rbfdot")
 hd_svmpred1 <- predict(hd_svm1, hd_test_lr_dt_rf)
 hd_svmpred2 <- predict(hd_svm2, hd_test_lr_dt_rf)
 hd_svmpredbin <- ifelse(hd_svmpred2 >= 0.05, 1, 0) 
-#if we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; True Positives (TP): 4 
-# if we set the threshold to 0.2, we will get True Negatives (TN): 1516; False Positives (FP): 49; False Negatives (FN): 234; True Positives (TP):29
-# After we compare two matrices, we can find: 
-#1)Poor F1 Score for the Minority Class: The F1 Score, which balances precision and recall, may be quite low for the minority class. The model's precision is TP / (TP + FP), which is also low (4 / (4 + 4) = 0.5 in this case), and the F1 Score will be affected by both.
-#2)Sensitivity (Recall) is Extremely Low (0.015209 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
-#3)Specificity is High(0.997444), but Misleading: Specificity is TN / (TN + FP), which will be high due to the high TN. This could mistakenly suggest that the model is performing better than it is.
 
 confusionMatrix(as.factor(hd_svmpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
+
 ```
-## decision tree
+If we set the threshold to 0.5, we will get True Negatives (TN): 1561; False Positives (FP): 4; False Negatives (FN): 259; True Positives (TP): 4 
+
+If we set the threshold to 0.2, we will get True Negatives (TN): 1516; False Positives (FP): 49; False Negatives (FN): 234; True Positives (TP):29
+
+After we compare two matrices, we can find: 
+1)Poor F1 Score for the Minority Class: The F1 Score, which balances precision and recall, may be quite low for the minority class. The model's precision is TP / (TP + FP), which is also low (4 / (4 + 4) = 0.5 in this case), and the F1 Score will be affected by both.
+2)Sensitivity (Recall) is Extremely Low (0.015209 ): Since Sensitivity is TP / (TP + FN), and TP is 4 in the larger threshold. 
+3)Specificity is High(0.997444), but Misleading: Specificity is TN / (TN + FP), which will be high due to the high TN. This could mistakenly suggest that the model is performing better than it is.
+
+In selecting the threshold for the SVM model, we aimed to mitigate the dataset's class imbalance effectively. By setting the threshold at 0.05, we achieved a Kappa value of 0.2042 and an accuracy of 0.7708. Conversely, setting the threshold at 0.5 yielded a significantly lower Kappa value of 0.0149, indicating poor model performance. Adjusting the threshold to 0.2 improved the Kappa value to 0.1167 but still fell short of the desired performance. After comparing these results, we determined that a threshold of 0.05 strikes the most suitable balance between Kappa value and accuracy, despite the associated false negatives.
+
+## Decision Tree
 ```{r}
 summary(hd_test_lr_dt_rf)
 
@@ -110,7 +131,7 @@ dtpredbin <- ifelse(dtpred >= 0.2, 1, 0)
 confusionMatrix(as.factor(dtpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 ```
 
-## random forest
+## Random Forest
 ```{r}
 set.seed(12345)
 rfmodel <- randomForest(ten_year_chd ~., data = hd_train_lr_dt_rf)
@@ -121,7 +142,8 @@ summary(rfpred)
 
 confusionMatrix(as.factor(rfpredbin), as.factor(hd_test_lr_dt_rf$ten_year_chd), positive = "1")
 ```
-## ann model
+
+## ANN Model
 ```{r}
 annmodel <- neuralnet(ten_year_chd ~ ., data = hd_train_ann, hidden = 5)
 ann_pred <- predict(annmodel, newdata = hd_test_ann)
@@ -129,7 +151,7 @@ ann_pred_bin <- ifelse(ann_pred >= 0.5, 1, 0)
 confusionMatrix(as.factor(ann_pred_bin), as.factor(hd_test_ann$ten_year_chd), positive = "1")
 ```
 
-## combine everything
+## Combine Everything
 ```{r}
 hd_combined <- data.frame(lrpred, knn_raw_pred, ann_pred, hd_svmpred1, hd_svmpred2, dtpred, rfpred, hd_test_lr_dt_rf$ten_year_chd)
 
@@ -144,20 +166,24 @@ model_2 <- C5.0(as.factor(hd_test_lr_dt_rf.ten_year_chd) ~. , data= train_2)
 pred_2 <- predict(model_2, test_2)
 confusionMatrix(as.factor(pred_2), as.factor(test_2$hd_test_lr_dt_rf.ten_year_chd), positive = "1")
 ```
-## error cost matrix
+
+## Error Cost Matrix
 ```{r}
 cost_matrix <- matrix(c(0,1,3,0), nrow =2 )
-
-#False Positive (FP): A false positive occurs when the model incorrectly predicts that a person has heart disease when they do not. While this is certainly not ideal—possibly leading to unnecessary stress for the patient, additional tests, and healthcare costs—the consequences are generally not as severe as missing a true positive case.
-
-#False Negative (FN): A false negative in the context of heart disease prediction means that a person who has heart disease is incorrectly predicted by the model as not having the disease. This is potentially dangerous as it may result in the patient not receiving timely treatment, which can lead to serious health complications or even death. Therefore, the cost of false negatives is considered to be high, as it directly impacts patient health and outcomes.
 
 cost_model <- C5.0(as.factor(hd_test_lr_dt_rf.ten_year_chd) ~. , data= train_2, costs = cost_matrix)
 plot(cost_model)
 pred_cost <- predict(cost_model, test_2)
 confusionMatrix(as.factor(pred_cost), as.factor(test_2$hd_test_lr_dt_rf.ten_year_chd), positive = "1")
 ```
-Summary of Model Performance
+
+False Positive (FP): A false positive occurs when the model incorrectly predicts that a person has heart disease when they do not. While this is certainly not ideal—possibly leading to unnecessary stress for the patient, additional tests, and healthcare costs—the consequences are generally not as severe as missing a true positive case.
+
+False Negative (FN): A false negative in the context of heart disease prediction means that a person who has heart disease is incorrectly predicted by the model as not having the disease. This is potentially dangerous as it may result in the patient not receiving timely treatment, which can lead to serious health complications or even death. Therefore, the cost of false negatives is considered to be high, as it directly impacts patient health and outcomes.
+
+In the error cost matrix, we selected the matrix [0, 1, 3, 0] to elevate the cost of false negatives, aiming to minimize their occurrence. This choice reflects our intention to prioritize the reduction of false negatives, considering their potential impact on the model's utility and effectiveness in real-world applications.
+
+## Summary of Model Performance
 ```{r}
 modeldata <- data.frame(
   Model = c("LR", "ANN", "KNN", "SVM", "DT", "RF", "Cost", "Combine"),
